@@ -43,7 +43,7 @@ Wrappers around `docker compose` for the Cura local stack. Extra args pass throu
 
 ```sh
 cura up                    # = docker compose -f $CURA_REPO/docker-compose.local.yml up -d
-cura up core-server        # only the core-server service
+cura up core-service        # only the core-service service
 cura down -v               # also remove volumes
 ```
 

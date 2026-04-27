@@ -76,5 +76,5 @@ Stimmt für Solo-Use. Aber Doctor-Aggregation, Ship-Wrap und spätere
 - ⏳ `cura up` / `cura down` / `cura ship` noch nicht durchlaufen — Acceptance #2-#4 werden beim ersten echten Run validiert.
 
 **Offene Hypothesen für Production (G3):**
-- `cura up` mit Subset-Args (`cura up core-server`) verhält sich wie erwartet.
+- `cura up` mit Subset-Args (`cura up core-service`) verhält sich wie erwartet.
 - `cura ship` aus beliebigem `cwd` aufgerufen committet im richtigen Repo.
