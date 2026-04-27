@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CURA_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CURA_LIB_DIR="${CURA_LIB_DIR:-$CURA_BIN_DIR/../lib/cura}"
+
+usage() {
+  cat <<EOF
+cura — Cura dev-env CLI (built on che-cli)
+
+Usage: cura <command> [args]
+
+Commands:
+  up                  start the Cura local stack (docker-compose.local.yml)
+  down                stop and remove the Cura local stack
+  ship                run 'che ship' inside \$CURA_REPO (recursive add+commit+push)
+  doctor [target]     verify deps via 'che doctor' + Cura-specific checks
+  help                show this message
+
+Environment:
+  CURA_REPO           path to the cura repo (default: \$HOME/workspace/misc/cura)
+  CURA_COMPOSE_FILE   compose file for up/down (default: \$CURA_REPO/docker-compose.local.yml)
+  CHE_*               passed through to che-cli (provider, model, etc.)
+
+Requires: che-cli (https://chevp.github.io/che-cli/)
+Docs:     https://chevp.github.io/cura-cli/
+EOF
+}
+
+cmd="${1:-help}"
+[ "$#" -gt 0 ] && shift || true
+
+case "$cmd" in
+  up)             exec bash "$CURA_LIB_DIR/stack/up.sh"   "$@" ;;
+  down)           exec bash "$CURA_LIB_DIR/stack/down.sh" "$@" ;;
+  ship)           exec bash "$CURA_LIB_DIR/git/ship.sh"   "$@" ;;
+  doctor)         exec bash "$CURA_LIB_DIR/doctor.sh"     "$@" ;;
+  help|-h|--help) usage ;;
+  *)
+    echo "cura: unknown command '$cmd'" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
