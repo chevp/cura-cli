@@ -66,8 +66,9 @@ function composeSection(): void {
 function nodeSection(): void {
   console.log("node:");
   ok(`node: ${process.version}`);
-  const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-  const npmCheck = spawnSync(npmBin, ["--version"], { encoding: "utf-8" });
+  const npmCheck = process.platform === "win32"
+    ? spawnSync("cmd.exe", ["/c", "npm", "--version"], { encoding: "utf-8" })
+    : spawnSync("npm", ["--version"], { encoding: "utf-8" });
   if (npmCheck.status === 0) ok(`npm: ${(npmCheck.stdout ?? "").trim()}`);
   else fail("npm not available");
 }
