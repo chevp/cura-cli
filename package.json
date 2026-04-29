@@ -1,0 +1,27 @@
+{
+  "name": "@cura/cli",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Cura dev-env CLI (Node.js + TypeScript port). Wraps docker compose and che-cli for Cura-specific workflows.",
+  "type": "module",
+  "bin": {
+    "cura": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "tsc",
+    "start": "node dist/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
