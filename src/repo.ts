@@ -1,6 +1,38 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, parse } from "node:path";
+
+function stateDir(): string {
+  if (process.platform === "win32" && process.env.LOCALAPPDATA) {
+    return join(process.env.LOCALAPPDATA, "cura");
+  }
+  const xdg = process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(xdg, "cura");
+}
+
+function stateFile(): string {
+  return join(stateDir(), "state.json");
+}
+
+function readCachedRepo(): string | null {
+  try {
+    const raw = readFileSync(stateFile(), "utf-8");
+    const parsed = JSON.parse(raw) as { repo?: string };
+    if (parsed.repo && looksLikeCuraRepo(parsed.repo)) return parsed.repo;
+  } catch {
+    /* no cache yet */
+  }
+  return null;
+}
+
+function writeCachedRepo(repo: string): void {
+  try {
+    mkdirSync(stateDir(), { recursive: true });
+    writeFileSync(stateFile(), JSON.stringify({ repo, savedAt: new Date().toISOString() }, null, 2));
+  } catch {
+    /* non-fatal; caching is best-effort */
+  }
+}
 
 function looksLikeCuraRepo(dir: string): boolean {
   return (
@@ -25,7 +57,12 @@ function walkUpForCuraRepo(start: string): string | null {
 export function getCuraRepo(): string {
   if (process.env.CURA_REPO) return process.env.CURA_REPO;
   const found = walkUpForCuraRepo(process.cwd());
-  if (found) return found;
+  if (found) {
+    writeCachedRepo(found);
+    return found;
+  }
+  const cached = readCachedRepo();
+  if (cached) return cached;
   return join(homedir(), "workspace", "misc", "cura");
 }
 
