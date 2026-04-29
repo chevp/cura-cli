@@ -25,11 +25,10 @@ function cheSection(): boolean {
   console.log("che-cli:");
   const r = checkCheVersion();
   if (r.found) {
-    ok(`che on $PATH: ${r.path}`);
-    if (r.output) info(r.output);
+    ok(`che on PATH`);
     return true;
   }
-  fail("che not on $PATH (cura-cli builds on che-cli)");
+  fail("che not on PATH (cura-cli builds on che-cli)");
   info("install: https://chevp.github.io/che-cli/");
   return false;
 }
@@ -38,10 +37,11 @@ function repoSection(): void {
   console.log("cura repo:");
   const repo = getCuraRepo();
   if (!existsSync(repo)) {
-    fail(`CURA_REPO not found: ${repo}`);
+    fail(`cura repo not found (set CURA_REPO or cd into the repo)`);
     return;
   }
-  ok(`CURA_REPO: ${repo}`);
+  const source = process.env.CURA_REPO ? "from $CURA_REPO" : "auto-detected";
+  ok(`cura repo (${source})`);
   for (const f of ["CLAUDE.md", "docker-compose.local.yml", "docker-compose.e2e.yml"]) {
     if (existsSync(join(repo, f))) ok(f);
     else fail(`${f} missing`);
@@ -91,8 +91,7 @@ export async function doctor(args: string[]): Promise<number> {
   const target = args[0] ?? "all";
   switch (target) {
     case "che":
-      cheSection();
-      return 0;
+      return cheSection() ? 0 : 1;
     case "repo":
       repoSection();
       return 0;
@@ -107,8 +106,8 @@ export async function doctor(args: string[]): Promise<number> {
       console.log(usage);
       return 0;
     case "all":
-    case "":
-      cheSection();
+    case "": {
+      const cheOk = cheSection();
       console.log();
       repoSection();
       console.log();
@@ -116,11 +115,12 @@ export async function doctor(args: string[]): Promise<number> {
       console.log();
       nodeSection();
       console.log();
-      if (hasChe()) {
+      if (cheOk) {
         console.log("che doctor:");
         return spawnChe(["doctor"]);
       }
-      return 0;
+      return 1;
+    }
     default:
       console.error(`cura doctor: unknown target '${target}'`);
       console.error(`valid: all, che, repo, compose, node`);

@@ -6,7 +6,6 @@ export function spawnDockerCompose(
   args: string[],
 ): Promise<number> {
   const dockerArgs = ["compose", "-f", composeFile, subcommand, ...args];
-  console.log(`→ docker ${dockerArgs.join(" ")}`);
   return new Promise((resolve) => {
     const child = spawn("docker", dockerArgs, { stdio: "inherit" });
     child.on("exit", (code) => resolve(code ?? 1));
