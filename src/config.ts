@@ -2,25 +2,27 @@ import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const CHI_CONFIG_FILE: string =
-  process.env.CHI_CONFIG_FILE ?? join(homedir(), ".chi", "config");
+export const CURA_CONFIG_FILE: string =
+  process.env.CURA_CONFIG_FILE ?? join(homedir(), ".cura", "config");
 
+/**
+ * cura-cli is ollama-only, so the persisted config knobs are limited to
+ * Ollama coordinates and the generic diff truncation.
+ */
 const KEY_TO_ENV: Record<string, string> = {
-  provider: "CHI_PROVIDER",
-  ollama_host: "CHI_OLLAMA_HOST",
-  ollama_model: "CHI_OLLAMA_MODEL",
-  max_diff_chars: "CHI_MAX_DIFF_CHARS",
-  force_claude_code: "CHI_FORCE_CLAUDE_CODE",
+  ollama_host: "CURA_OLLAMA_HOST",
+  ollama_model: "CURA_OLLAMA_MODEL",
+  max_diff_chars: "CURA_MAX_DIFF_CHARS",
 };
 
 /**
- * Mirrors lib/che/config_load.sh: only sets a CHI_* var when it isn't already
- * present in the environment, so explicit env > saved config > built-in default.
+ * Only sets a CURA_* var when it isn't already present in the environment,
+ * so: explicit env > saved config > built-in default.
  */
 export function loadPersistedConfig(): void {
-  if (!existsSync(CHI_CONFIG_FILE)) return;
+  if (!existsSync(CURA_CONFIG_FILE)) return;
 
-  const raw = readFileSync(CHI_CONFIG_FILE, "utf8");
+  const raw = readFileSync(CURA_CONFIG_FILE, "utf8");
   for (const rawLine of raw.split(/\r?\n/)) {
     const trimmed = rawLine.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;

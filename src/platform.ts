@@ -1,9 +1,9 @@
 import { platform, release } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 
-export type ChiOS = "darwin" | "windows" | "wsl" | "linux" | "unknown";
+export type CuraOS = "darwin" | "windows" | "wsl" | "linux" | "unknown";
 
-export function detectPlatform(): ChiOS {
+export function detectPlatform(): CuraOS {
   switch (platform()) {
     case "darwin":
       return "darwin";
@@ -25,5 +25,5 @@ export function detectPlatform(): ChiOS {
   }
 }
 
-export const CHI_OS: ChiOS = detectPlatform();
+export const CURA_OS: CuraOS = detectPlatform();
 export const _release = release;

@@ -1,8 +1,8 @@
 import type { Provider } from "./types.js";
 import { commandExists, execAsync } from "../spawn.js";
 
-const HOST = (): string => process.env.CHI_OLLAMA_HOST ?? "http://localhost:11434";
-const MODEL = (): string => process.env.CHI_OLLAMA_MODEL ?? "llama3.2";
+const HOST = (): string => process.env.CURA_OLLAMA_HOST ?? "http://localhost:11434";
+const MODEL = (): string => process.env.CURA_OLLAMA_MODEL ?? "llama3.2";
 
 async function fetchWithTimeout(
   url: string,

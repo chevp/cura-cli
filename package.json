@@ -1,8 +1,8 @@
 {
   "name": "@cura/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Cura dev-env CLI (Node.js + TypeScript port). Wraps docker compose and che-cli for Cura-specific workflows.",
+  "description": "Cura dev-env CLI (Node.js + TypeScript). Standalone ollama-backed git/workflow CLI plus docker-compose helpers — no che-cli, no gh, no python.",
   "type": "module",
   "bin": {
     "cura": "dist/main.js"

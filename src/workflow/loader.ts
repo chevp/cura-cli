@@ -12,12 +12,12 @@ export interface ResolvedWorkflow {
   file: string;
   /** Parsed document */
   doc: YamlValue;
-  /** True when the workflow came from chi's bundled .che/, not a per-repo override. */
+  /** True when the workflow came from cura-cli's bundled .che/, not a per-repo override. */
   builtin: boolean;
 }
 
 /**
- * Path to chi's install root (the directory containing chi's own `.che/`).
+ * Path to cura-cli's install root (the directory containing chi's own `.che/`).
  *
  * Both compiled (`<root>/dist/workflow/loader.js`) and dev (`<root>/src/workflow/loader.ts`
  * via tsx) layouts place this file two directories below the install root.
@@ -27,8 +27,8 @@ export function bundleRoot(): string {
 }
 
 /**
- * Look up `<name>.yml|yaml` inside chi's bundled `.che/workflows/`.
- * Returns null when chi was not installed with its `.che/` (e.g. partial
+ * Look up `<name>.yml|yaml` inside cura-cli's bundled `.che/workflows/`.
+ * Returns null when cura-cli was not installed with its `.che/` (e.g. partial
  * checkout) or the named workflow is not bundled.
  */
 function findBuiltin(name: string): { root: string; dir: string; file: string } | null {
@@ -90,7 +90,7 @@ export function resolveWorkflow(name: string, cwd: string = process.cwd()): Reso
     return { root: builtin.root, dir: builtin.dir, file: builtin.file, doc, builtin: true };
   }
   if (!where) throw new WorkflowError(`no .che/workflows/ found above ${cwd}`);
-  throw new WorkflowError(`workflow not found: ${name} (looked in ${where.dir} or chi's bundled workflows)`);
+  throw new WorkflowError(`workflow not found: ${name} (looked in ${where.dir} or cura-cli's bundled workflows)`);
 }
 
 /** Validate the top-level shape: name + non-empty steps with `script:` each. */

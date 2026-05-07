@@ -1,6 +1,6 @@
 /**
- * Minimal YAML parser for chi workflow files. Supports the subset needed by
- * `chi workflow {list, show, run}` — see `.che/workflows/*.yml`:
+ * Minimal YAML parser for cura workflow files. Supports the subset needed by
+ * `cura workflow {list, show, run}` — see `.che/workflows/*.yml`:
  *
  *   - top-level keys with scalar values (string, int, bool, null)
  *   - nested maps via two-space indentation
@@ -12,7 +12,7 @@
  * Out of scope: anchors / aliases, tags, multi-line scalars (`|`, `>`),
  * tabs (rejected — same as PyYAML), multiple documents.
  *
- * The parser exists so chi keeps the zero-runtime-deps constraint (ADR-003)
+ * The parser exists so cura-cli keeps the zero-runtime-deps constraint (ADR-003)
  * — replacing the python/PyYAML helper that che-cli uses.
  */
 export type YamlValue = string | number | boolean | null | YamlValue[] | { [k: string]: YamlValue };
