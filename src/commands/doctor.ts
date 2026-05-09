@@ -7,17 +7,18 @@ import { commandExists } from "../spawn.js";
 import { getCuraRepo } from "../repo.js";
 import { dockerComposeVersion } from "../docker.js";
 
-const HELP = `cura doctor — verify deps for cura-cli (ollama-only).
+const HELP = `cura doctor — verify deps for cura-cli.
 
 Usage: cura doctor [target]
 
 Targets:
   all       run every check (default)
-  git       check that 'git' is on PATH
   docker    check 'docker compose' v2
   ollama    check ollama binary + server reachability + model
   repo      check the cura repo (CLAUDE.md + docker-compose.local.yml)
   node      check Node.js + npm
+
+Note: cura-cli does NOT verify git/gh — use 'che doctor' (che-cli) for that.
 `;
 
 function ok(msg: string): void {
@@ -28,18 +29,6 @@ function fail(msg: string): void {
 }
 function info(msg: string): void {
   process.stdout.write(`    ${c.dim(msg)}\n`);
-}
-
-function checkGit(): boolean {
-  section("git");
-  if (!commandExists("git")) {
-    fail("git not on PATH");
-    info("install: https://git-scm.com");
-    return false;
-  }
-  const r = spawnSync("git", ["--version"], { encoding: "utf8" });
-  ok((r.stdout ?? "").trim() || "git on PATH");
-  return true;
 }
 
 function checkDocker(): boolean {
@@ -138,9 +127,6 @@ export async function run(argv: string[]): Promise<number> {
   }
   let allOk = true;
   switch (target) {
-    case "git":
-      allOk = checkGit();
-      break;
     case "docker":
       allOk = checkDocker();
       break;
@@ -155,7 +141,6 @@ export async function run(argv: string[]): Promise<number> {
       allOk = checkNode();
       break;
     case "all":
-      allOk = checkGit() && allOk;
       allOk = checkDocker() && allOk;
       allOk = (await checkOllama()) && allOk;
       allOk = checkRepo() && allOk;
@@ -163,9 +148,11 @@ export async function run(argv: string[]): Promise<number> {
       break;
     default:
       process.stderr.write(`cura doctor: unknown target '${target}'\n`);
-      process.stderr.write("valid: all, git, docker, ollama, repo, node\n");
+      process.stderr.write("valid: all, docker, ollama, repo, node\n");
       return 1;
   }
   line();
+  // Suppress unused-import lint when no consumer references kv at module scope.
+  void kv;
   return allOk ? 0 : 1;
 }

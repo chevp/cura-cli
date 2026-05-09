@@ -3,10 +3,7 @@ import { loadPersistedConfig } from "./config.js";
 import * as helpCmd from "./commands/help.js";
 import * as upCmd from "./commands/up.js";
 import * as downCmd from "./commands/down.js";
-import * as shipCmd from "./commands/ship.js";
-import * as commitCmd from "./commands/commit.js";
 import * as statusCmd from "./commands/status.js";
-import * as explainCmd from "./commands/explain.js";
 import * as initCmd from "./commands/init.js";
 import * as reinstallCmd from "./commands/reinstall.js";
 import * as configCmd from "./commands/config.js";
@@ -20,10 +17,7 @@ type CommandRunner = (argv: string[]) => Promise<number>;
 const COMMANDS: Record<string, CommandRunner> = {
   up: (a) => upCmd.up(a),
   down: (a) => downCmd.down(a),
-  ship: shipCmd.run,
-  commit: commitCmd.run,
   status: statusCmd.run,
-  explain: explainCmd.run,
   init: initCmd.run,
   reinstall: reinstallCmd.run,
   config: configCmd.run,
@@ -37,10 +31,6 @@ const COMMANDS: Record<string, CommandRunner> = {
   "--help": helpCmd.run,
 };
 
-/**
- * Reserved commands skip the workflow-trigger lookup so workflows stay
- * manageable even if a user authors a `trigger: workflow` (footgun guard).
- */
 const RESERVED_FOR_TRIGGER = new Set(["help", "-h", "--help", "workflow", "run"]);
 
 async function main(): Promise<number> {
@@ -48,8 +38,6 @@ async function main(): Promise<number> {
 
   const [, , cmd = "help", ...rest] = process.argv;
 
-  // Workflow triggers shadow built-ins. A `.che/workflows/*.yml` declaring
-  // `trigger: <cmd>` takes precedence over the dispatch table below.
   if (!RESERVED_FOR_TRIGGER.has(cmd)) {
     try {
       const lookup = resolveTrigger(cmd);
