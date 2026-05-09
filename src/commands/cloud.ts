@@ -2,6 +2,13 @@ import { commandExists, execAsync } from "../spawn.js";
 import { getCuraRepo } from "../repo.js";
 import { confirmYesNo } from "../prompt.js";
 import { c, kv, line, section } from "../ui.js";
+import {
+  CLOUD_RUN_SERVICES,
+  activeGcloudAccount,
+  describeService,
+  readGcpEnv,
+  type GcpEnv,
+} from "../gcp.js";
 
 const HELP = `cura cloud — steuert die GCP Cloud Run Services (cura-app, core-service, cura-llm).
 
@@ -23,7 +30,7 @@ Environment:
   GCP_REGION           Default europe-west6
 `;
 
-const SERVICES = ["cura-app", "core-service", "cura-llm"] as const;
+const SERVICES = CLOUD_RUN_SERVICES;
 const PUBLIC_SERVICES = ["cura-app", "core-service"] as const;
 const WORKFLOW_FILE = "deploy-gcp.yml";
 
@@ -37,24 +44,18 @@ function info(msg: string): void {
   process.stdout.write(`  ${c.dim(msg)}\n`);
 }
 
-interface CloudEnv {
-  project: string;
-  region: string;
-}
+type CloudEnv = GcpEnv;
 
 function readCloudEnv(): CloudEnv | null {
-  const project = process.env.GCP_PROJECT;
-  if (!project) {
+  const env = readGcpEnv();
+  if (!env) {
     process.stderr.write(
       `cura cloud: GCP_PROJECT ist nicht gesetzt.\n` +
         `       hint: export GCP_PROJECT=<projekt-id>  (siehe deployment/cloud-run.md)\n`,
     );
     return null;
   }
-  return {
-    project,
-    region: process.env.GCP_REGION || "europe-west6",
-  };
+  return env;
 }
 
 async function ensureGcloud(): Promise<boolean> {
@@ -96,80 +97,13 @@ async function serviceExists(svc: string, env: CloudEnv): Promise<boolean> {
   return r.ok && r.stdout.trim() === svc;
 }
 
-interface ServiceInfo {
-  exists: boolean;
-  url: string;
-  ingress: string;
-  iap: string;
-  revision: string;
-  ready: boolean;
-  notReadyReason: string;
-}
-
-async function describeService(svc: string, env: CloudEnv): Promise<ServiceInfo> {
-  const empty: ServiceInfo = {
-    exists: false,
-    url: "",
-    ingress: "",
-    iap: "",
-    revision: "",
-    ready: false,
-    notReadyReason: "",
-  };
-  const r = await execAsync(
-    "gcloud",
-    [
-      "run",
-      "services",
-      "describe",
-      svc,
-      `--region=${env.region}`,
-      `--project=${env.project}`,
-      "--format=json",
-    ],
-    { separateStderr: true },
-  );
-  if (!r.ok || !r.stdout.trim()) return empty;
-  try {
-    const obj = JSON.parse(r.stdout) as {
-      status?: {
-        url?: string;
-        latestReadyRevisionName?: string;
-        conditions?: Array<{ type?: string; status?: string; message?: string }>;
-      };
-      spec?: { template?: { metadata?: { annotations?: Record<string, string> } } };
-      metadata?: { annotations?: Record<string, string> };
-    };
-    const tplAnn = obj.spec?.template?.metadata?.annotations ?? {};
-    const meta = obj.metadata?.annotations ?? {};
-    const readyCond = obj.status?.conditions?.find((c) => c.type === "Ready");
-    return {
-      exists: true,
-      url: obj.status?.url ?? "",
-      ingress: tplAnn["run.googleapis.com/ingress"] ?? "all",
-      iap: meta["run.googleapis.com/iap-enabled"] ?? "false",
-      revision: obj.status?.latestReadyRevisionName ?? "?",
-      ready: readyCond?.status === "True",
-      notReadyReason:
-        readyCond?.status === "False" ? readyCond?.message ?? "not ready" : "",
-    };
-  } catch {
-    return empty;
-  }
-}
-
 async function runStatus(): Promise<number> {
   const env = readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 
   // Aktiver gcloud-Account zur Orientierung — Calls schlagen sonst stumm fehl.
-  const auth = await execAsync(
-    "gcloud",
-    ["auth", "list", "--filter=status:ACTIVE", "--format=value(account)"],
-    { separateStderr: true },
-  );
-  const account = auth.ok ? auth.stdout.trim() : "";
+  const account = await activeGcloudAccount();
 
   section(`cloud status (${env.project} / ${env.region})`);
   kv("account", account || c.red("nicht eingeloggt — gcloud auth login"));

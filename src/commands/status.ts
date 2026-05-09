@@ -16,17 +16,109 @@ import {
   upstreamRef,
 } from "../git/index.js";
 import { parseFrontmatterFile, statusBadge } from "../frontmatter.js";
+import { isInsideCuraRepo } from "../repo.js";
+import { commandExists } from "../spawn.js";
+import {
+  CLOUD_RUN_SERVICES,
+  activeGcloudAccount,
+  describeService,
+  readGcpEnv,
+} from "../gcp.js";
 
 const HELP = `cura status — overview of the current repo and cura-cli configuration.
 
 Usage: cura status [options]
 
 Options:
-  -s, --short   only the one-line summary (no recent commits, no submodules)
+  -s, --short   only the one-line summary (no recent commits, no submodules,
+                no cloud / cyon checks)
   -h, --help    show this help
+
+Cloud + Cyon sections appear when run inside the cura repo (long mode only):
+  cloud:   GCP Cloud Run services — needs GCP_PROJECT + gcloud on PATH
+  cyon:    HTTP probes against cura.sowuvuma.cyon.site (3s timeout each)
 `;
 
 const MAX_GLOBAL_REPOS = 10;
+
+const CYON_PROBES: Array<{ name: string; url: string }> = [
+  { name: "api",       url: "https://cura.sowuvuma.cyon.site/api/health/config-check" },
+  { name: "showcase",  url: "https://cura.sowuvuma.cyon.site/cura-showcase/" },
+  { name: "storybook", url: "https://cura.sowuvuma.cyon.site/cura-storybook/" },
+  { name: "progress",  url: "https://cura.sowuvuma.cyon.site/cura-progress/progress.html" },
+];
+
+async function probeUrl(url: string, timeoutMs = 3_000): Promise<{ code: number; ms: number; err?: string }> {
+  const start = Date.now();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method: "GET", signal: ctrl.signal, redirect: "follow" });
+    return { code: res.status, ms: Date.now() - start };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { code: 0, ms: Date.now() - start, err: /abort/i.test(msg) ? "timeout" : msg };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function cloudSection(): Promise<void> {
+  const env = readGcpEnv();
+  if (!env) return;
+  if (!commandExists("gcloud")) return;
+
+  section(`gcp cloud run (${env.project} / ${env.region})`);
+  const account = await activeGcloudAccount();
+  if (!account) {
+    process.stdout.write(`  ${c.red("✗")} gcloud not logged in — run 'gcloud auth login'\n`);
+    return;
+  }
+  kv("account", account);
+
+  const infos = await Promise.all(
+    CLOUD_RUN_SERVICES.map(async (svc) => [svc, await describeService(svc, env)] as const),
+  );
+  for (const [svc, info] of infos) {
+    if (!info.exists) {
+      process.stdout.write(`  ${c.red("✗")} ${svc.padEnd(14)} ${c.dim("(not deployed)")}\n`);
+      continue;
+    }
+    const mark = info.ready ? c.green("✓") : c.red("✗");
+    const ingress = info.ingress === "all" ? c.green("public") : c.yellow(info.ingress);
+    process.stdout.write(
+      `  ${mark} ${svc.padEnd(14)} ${ingress.padEnd(16)} ${c.dim(info.url || "")}\n`,
+    );
+    if (!info.ready && info.notReadyReason) {
+      process.stdout.write(`    ${c.dim(`└─ ${info.notReadyReason}`)}\n`);
+    }
+  }
+}
+
+async function cyonSection(): Promise<void> {
+  section("cyon (cura.sowuvuma.cyon.site)");
+  const results = await Promise.all(
+    CYON_PROBES.map(async (p) => [p, await probeUrl(p.url)] as const),
+  );
+  for (const [p, r] of results) {
+    let mark: string;
+    let label: string;
+    if (r.code >= 200 && r.code < 400) {
+      mark = c.green("✓");
+      label = `${r.code} ${c.dim(`${r.ms}ms`)}`;
+    } else if (r.code === 401 || r.code === 403) {
+      mark = c.yellow("◐");
+      label = `${r.code} ${c.dim("(auth gated)")}`;
+    } else if (r.code === 0) {
+      mark = c.red("✗");
+      label = c.dim(r.err ?? "unreachable");
+    } else {
+      mark = c.red("✗");
+      label = `${r.code}`;
+    }
+    process.stdout.write(`  ${mark} ${p.name.padEnd(14)} ${label.padEnd(20)} ${c.dim(p.url)}\n`);
+  }
+}
 
 /** Scan immediate children of `dir` for git repositories (up to MAX_GLOBAL_REPOS). */
 function discoverRepos(dir: string): string[] {
@@ -235,6 +327,13 @@ export async function run(argv: string[]): Promise<number> {
         process.stdout.write(`  ${c.dim(`(no plans in ${plansDir})`)}\n`);
       }
     }
+  }
+
+  // ---- cloud + cyon (cura repo only, long mode only) --------------------
+  // Beide Sektionen telefonieren ans Internet — daher streng gated. Parallel,
+  // damit der gesamte Block in einer Round-Trip-Zeit durchläuft.
+  if (!short && isInsideCuraRepo()) {
+    await Promise.all([cloudSection(), cyonSection()]);
   }
 
   line();

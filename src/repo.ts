@@ -41,6 +41,11 @@ function looksLikeCuraRepo(dir: string): boolean {
   );
 }
 
+/** True when the current cwd (or an ancestor) is the cura repo. */
+export function isInsideCuraRepo(): boolean {
+  return walkUpForCuraRepo(process.cwd()) !== null;
+}
+
 function walkUpForCuraRepo(start: string): string | null {
   let cur = start;
   const root = parse(cur).root;
