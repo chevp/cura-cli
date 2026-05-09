@@ -1,5 +1,12 @@
-import type { Provider } from "./types.js";
 import { commandExists, execAsync } from "../spawn.js";
+
+interface OllamaProvider {
+  readonly name: "ollama";
+  activeModel(): string;
+  ping(): Promise<boolean>;
+  hasModel(model?: string): Promise<boolean>;
+  generate(prompt: string): Promise<string>;
+}
 
 const HOST = (): string => process.env.CURA_OLLAMA_HOST ?? "http://localhost:11434";
 const MODEL = (): string => process.env.CURA_OLLAMA_MODEL ?? "llama3.2";
@@ -35,7 +42,7 @@ export async function startOllamaServer(timeoutSec = 10): Promise<boolean> {
   return false;
 }
 
-export const ollamaProvider: Provider = {
+export const ollamaProvider: OllamaProvider = {
   name: "ollama",
 
   activeModel() {

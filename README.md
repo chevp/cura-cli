@@ -1,19 +1,23 @@
 # cura-cli
 
-Cura dev-env CLI. **Builds on [che-cli](https://github.com/chevp/che-cli)** —
-git/LLM/provider work is delegated to `che`, `cura` adds Cura-stack-specific
-commands.
+Cura-spezifische Dev-Env-Befehle (Docker-Stack, Ollama-Setup, GCP Cloud Run,
+`.che/workflows`-Runner). **Standalone, pure Node.js** — keine Abhängigkeit
+auf `che-cli`, kein Python, kein `js-yaml`.
 
 ```sh
 $ cura up                  # docker compose -f docker-compose.local.yml up -d
 $ cura down
-$ cura ship                # cd into the cura repo, then run `che ship`
-$ cura doctor              # cura checks + 'che doctor'
+$ cura init                # provision local Ollama + pull model
+$ cura cloud status        # show GCP Cloud Run state
+$ cura run deploy-gcp      # execute .che/workflows/deploy-gcp.yml
+$ cura doctor              # verify deps (docker, ollama, repo, node)
 ```
 
-> **Status:** v0.2 — Node.js + TypeScript port (was v0.1 Bash).
-> See [SPEC.md](SPEC.md) and [§13 plans](../../context/plans/).
-> **Requires:** [che-cli](https://chevp.github.io/che-cli/), `node >= 18`, `docker compose v2`.
+> **Status:** v0.3 — Cura-only. Git/GitHub-Commands wurden entfernt.
+> **Requires:** `node >= 18`, `docker compose v2`. (Optional: `ollama`, `gcloud`, `gh`.)
+
+**Git/GitHub-Workflows** (commit, push, PR, ...) gehören zu
+[`che-cli`](https://chevp.github.io/che-cli/), nicht hierher.
 
 ---
 
@@ -25,29 +29,27 @@ cd cura/tools/cura-cli
 npm install -g .
 ```
 
-That's it. `npm install -g .` builds the TypeScript via the `prepare` hook and
-puts a `cura` executable in your npm global bin directory — which is already on
-PATH on a normal Node install.
+`npm install -g .` baut das TypeScript via `prepare`-Hook und legt einen
+`cura`-Executable in deinen npm-Global-Bin. Auf einem Standard-Node-Install ist
+der bereits auf PATH:
 
-- **Windows:** `%APPDATA%\npm\cura.cmd` and `cura.ps1`
-- **macOS / Linux:** symlink in `$(npm config get prefix)/bin/cura`
+- **Windows:** `%APPDATA%\npm\cura.cmd` und `cura.ps1`
+- **macOS / Linux:** Symlink in `$(npm config get prefix)/bin/cura`
 
-After install, run `cura doctor` to verify everything works.
+Nach dem Install: `cura doctor` zur Verifikation.
 
 ---
 
-## Auto-detection
+## Auto-Detection des Cura-Repos
 
-cura is meant to "just work" — you don't need to set any env var.
+cura ist gemeint zum "just work" — `CURA_REPO` muss nicht gesetzt werden.
 
-When you run any `cura` command from inside the cura tree (or any sub-directory),
-cura walks up to find the repo root (`CLAUDE.md` + `docker-compose.local.yml`)
-and caches that location to `%LOCALAPPDATA%\cura\state.json` (Win) or
-`~/.config/cura/state.json` (Unix).
+Bei jedem Aufruf aus dem cura-Tree (oder Sub-Verzeichnis) walkt cura nach oben
+und sucht das Repo-Root (`CLAUDE.md` + `docker-compose.local.yml`). Der Pfad
+wird zu `%LOCALAPPDATA%\cura\state.json` (Win) bzw. `~/.config/cura/state.json`
+(Unix) gecached. Aufrufe von ausserhalb des Trees lesen den Cache.
 
-On later invocations from outside the tree (e.g. `cura ship` from any cwd),
-cura reads the cached path. You only need `CURA_REPO=…` if you have multiple
-cura clones and want to point cura at a specific one.
+Nur bei mehreren cura-Clones explizit `CURA_REPO=…` setzen.
 
 ---
 
@@ -55,35 +57,93 @@ cura clones and want to point cura at a specific one.
 
 ### `cura up` / `cura down`
 
-Wrappers around `docker compose` for the Cura local stack. Extra args pass through.
+`docker compose`-Wrapper für den Cura-Local-Stack. Extra-Args werden
+durchgereicht.
 
 ```sh
 cura up                    # = docker compose -f <repo>/docker-compose.local.yml up -d
-cura up core-service       # only the core-service service
-cura down -v               # also remove volumes
+cura up core-service       # nur core-service
+cura down -v               # auch Volumes entfernen
 ```
 
-### `cura ship`
+### `cura init`
 
-Runs `che ship` inside the cura repo — recursive add + commit + push,
-including submodules. Works regardless of the current directory.
+Provisioniert das lokale Ollama-Setup: Binary prüfen, `ollama serve` starten,
+`$CURA_OLLAMA_MODEL` pullen.
+
+### `cura cloud <sub>`
+
+Steuert die GCP Cloud Run Services. `GCP_PROJECT` wird gelesen aus:
+1. ENV-Variable `GCP_PROJECT`
+2. Fallback: `gcloud config get-value project`
 
 ```sh
-cura ship
+cura cloud status          # URL, Ingress, IAP, Revision pro Service
+cura cloud start           # cura-app + core-service public schalten
+cura cloud stop            # Public-Ingress sperren (Services bleiben)
+cura cloud reset --yes     # alle Services löschen
+cura cloud rebuild         # gh workflow run deploy-gcp.yml
 ```
 
-### `cura doctor`
+> **Hinweis:** `GCP_PROJECT` ist im cura-Repo als GitHub-Actions-Secret
+> hinterlegt — Secrets sind aber **nicht** automatisch in deinem Terminal.
+> Setze entweder `export GCP_PROJECT=<projekt-id>` oder
+> `gcloud config set project <projekt-id>`.
 
-Aggregated health check. Runs Cura-specific checks (che on PATH, cura repo,
-docker compose v2, node), then delegates to `che doctor` for git/provider/ollama checks.
+### `cura workflow` / `cura run <name>`
+
+Führt YAML-Workflows aus `.che/workflows/<name>.yml` aus. Steps referenzieren
+existierende Skripte (`script:` + `args:` mit `${input}`-Substitution). Kein
+Inline-Bash.
 
 ```sh
-cura doctor
-cura doctor che            # only the che-cli check
-cura doctor repo           # only the cura repo check
-cura doctor compose        # only docker compose v2
-cura doctor node           # only Node.js + npm
+cura workflow list
+cura workflow show deploy-gcp
+cura workflow run deploy-gcp --GCP_PROJECT=cura-prod
+cura run deploy-gcp                 # Alias
+cura deploy-gcp                     # via 'trigger:' in YAML
 ```
+
+### `cura status`
+
+Übersicht: cura-cli Config (Ollama-Provider, ENV-Variablen), Plans aus
+`.che/plans/`, GCP Cloud Run + Cyon-Probes (long mode, nur im cura-Repo).
+
+```sh
+cura status                # voll
+cura status -s             # short — Config + Plans, kein Cloud/Cyon
+```
+
+### `cura doctor [target]`
+
+Health-Check: Docker (Compose v2), Ollama (Binary + Server + Model), Cura-Repo,
+Node.js + npm.
+
+```sh
+cura doctor                # alle
+cura doctor docker         # nur Docker
+cura doctor ollama         # nur Ollama
+cura doctor repo           # nur Cura-Repo
+cura doctor node           # nur Node.js + npm
+```
+
+### `cura config`
+
+Persistente Settings in `~/.cura/config`. Explizite ENV-Variablen gewinnen
+trotzdem.
+
+```sh
+cura config                            # listet alle
+cura config ollama_model qwen2.5:0.5b
+cura config ollama_host
+cura config --unset ollama_model
+cura config edit                       # öffnet im $EDITOR
+```
+
+### `cura reinstall`
+
+Re-runs das repo-lokale `scripts/reinstall.{sh,ps1}`. Auf Windows wird `.ps1`
+bevorzugt, sonst `.sh`. Walk-up nach `scripts/`-Verzeichnis.
 
 ---
 
@@ -93,7 +153,10 @@ cura doctor node           # only Node.js + npm
 |----------------------|--------------------------------------------------------------------------|
 | `CURA_REPO`          | auto-detected (walk-up + cache); fallback `$HOME/workspace/misc/cura`    |
 | `CURA_COMPOSE_FILE`  | `<CURA_REPO>/docker-compose.local.yml`                                   |
-| `CHE_*`              | (passed through to `che`)                                                |
+| `CURA_OLLAMA_HOST`   | `http://localhost:11434`                                                 |
+| `CURA_OLLAMA_MODEL`  | `llama3.2`                                                               |
+| `GCP_PROJECT`        | (kein Default — Fallback auf `gcloud config get-value project`)          |
+| `GCP_REGION`         | `europe-west6`                                                           |
 
 ---
 
@@ -106,34 +169,43 @@ tools/cura-cli/
 ├── src/
 │   ├── main.ts              # subcommand dispatcher
 │   ├── repo.ts              # auto-detect + cache cura repo
-│   ├── che.ts               # `che` lookup + spawn (Win .bat handling)
-│   ├── docker.ts            # `docker compose` wrapper
+│   ├── docker.ts            # 'docker compose' wrapper
+│   ├── gcp.ts               # GCP_PROJECT / gcloud helpers
+│   ├── frontmatter.ts       # parse .che/plans frontmatter
+│   ├── yaml.ts              # minimal YAML parser (no js-yaml dep)
+│   ├── workflow/loader.ts   # .che/workflows resolver
+│   ├── provider/ollama.ts   # local Ollama HTTP client
 │   └── commands/
-│       ├── up.ts
-│       ├── down.ts
-│       ├── ship.ts
-│       └── doctor.ts
+│       ├── up.ts / down.ts
+│       ├── init.ts          # ollama provisioning
+│       ├── cloud.ts         # GCP Cloud Run
+│       ├── workflow.ts      # workflow runner
+│       ├── status.ts / doctor.ts
+│       ├── config.ts / reinstall.ts
+│       └── help.ts
 ├── README.md
 └── SPEC.md
 ```
 
 ## Adding a new tool
 
-1. Drop a new file at `src/commands/<name>.ts` exporting a default async function.
-2. Wire it into the `switch` in [`src/main.ts`](src/main.ts).
-3. Re-run `npm install -g .` (or `npm run build` if you're iterating).
+1. Drop `src/commands/<name>.ts` mit default-async-Function.
+2. Wire es in den dispatch table in [`src/main.ts`](src/main.ts).
+3. Re-run `npm install -g .` (oder `npm run build` während Iteration).
 
-## Positioning vs `che` and `gh`
+## Positioning vs `che`, `gh`, `git`
 
-cura-cli is a Cura-repo helper, **not** a competing general-purpose CLI:
+cura-cli ist ein **Cura-Repo-Helper**, kein Allzweck-CLI:
 
-- LLM provider routing, AI commit messages, git/GitHub work → stays in `che`.
-- GitHub-API operations (PR, issue, release) → stays in `gh` or via `che`.
-- cura-cli only adds Cura-specific glue (`up`/`down`/`ship`/`doctor`) on top.
+- Git/GitHub-Workflows (commit, push, PR, doctor-für-git) → **`che-cli`**.
+- GitHub-API (PRs, Issues, Releases) → **`gh`** oder via `che`.
+- Direktes Git → **`git`** selbst.
+- cura-cli adds nur Cura-Stack-Glue: `up`/`down`/`init`/`cloud`/`workflow`/...
 
-If a feature would also be useful outside Cura, it belongs in `che`, not here.
+Wenn ein Feature auch ausserhalb des Cura-Repos nützlich wäre, gehört es nicht
+hierher.
 
 ## Related
 
-- [che-cli](https://chevp.github.io/che-cli/) — the dependency this CLI builds on
-- [cura-llm-local](https://chevp.github.io/cura-llm-local/) — local Ollama setup
+- [che-cli](https://chevp.github.io/che-cli/) — git/LLM/provider-CLI
+- [cura-llm-local](https://chevp.github.io/cura-llm-local/) — lokales Ollama-Setup
