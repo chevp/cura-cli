@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "node -e \"\"",
     "start": "node dist/main.js"
   },
   "files": [
