@@ -9,7 +9,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "tsc",
     "start": "node dist/main.js"
   },
   "files": [
