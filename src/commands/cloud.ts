@@ -1,6 +1,4 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { commandExists, execAsync, execInherit } from "../spawn.js";
+import { commandExists, execAsync } from "../spawn.js";
 import { getCuraRepo } from "../repo.js";
 import { confirmYesNo } from "../prompt.js";
 import { c, kv, line, section } from "../ui.js";
@@ -10,7 +8,7 @@ const HELP = `cura cloud — steuert die GCP Cloud Run Services (cura-app, core-
 Usage: cura cloud <subcommand> [options]
 
 Subcommands:
-  status               zeigt den Deployment-Status (führt scripts/gcp/verify.sh aus)
+  status               zeigt URL, Ingress, IAP, Revision pro Service
   start                macht cura-app + core-service public erreichbar
                        (--ingress=all --allow-unauthenticated)
   stop                 sperrt den Public-Ingress (--ingress=internal
