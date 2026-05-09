@@ -13,7 +13,7 @@
  * tabs (rejected — same as PyYAML), multiple documents.
  *
  * The parser exists so cura-cli keeps the zero-runtime-deps constraint (ADR-003)
- * — replacing the python/PyYAML helper that che-cli uses.
+ * — no python/PyYAML, no js-yaml. Pure Node.
  */
 export type YamlValue = string | number | boolean | null | YamlValue[] | { [k: string]: YamlValue };
 

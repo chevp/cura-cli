@@ -26,7 +26,7 @@ Subcommands:
                        (Build + Redeploy aller Services).
 
 Environment:
-  GCP_PROJECT          (required) GCP Projekt-ID
+  GCP_PROJECT          GCP Projekt-ID. Fallback: 'gcloud config get-value project'
   GCP_REGION           Default europe-west6
 `;
 
@@ -100,7 +100,7 @@ async function serviceExists(svc: string, env: CloudEnv): Promise<boolean> {
 }
 
 async function runStatus(): Promise<number> {
-  const env = readCloudEnv();
+  const env = await readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 
@@ -171,7 +171,7 @@ async function updateIngress(
 }
 
 async function runStart(): Promise<number> {
-  const env = readCloudEnv();
+  const env = await readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 
@@ -193,7 +193,7 @@ async function runStart(): Promise<number> {
 }
 
 async function runStop(): Promise<number> {
-  const env = readCloudEnv();
+  const env = await readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 
@@ -212,7 +212,7 @@ async function runStop(): Promise<number> {
 }
 
 async function runReset(argv: string[]): Promise<number> {
-  const env = readCloudEnv();
+  const env = await readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 

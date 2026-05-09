@@ -2,7 +2,7 @@
   "name": "@cura/cli",
   "version": "0.3.0",
   "private": true,
-  "description": "Cura dev-env CLI (Node.js + TypeScript). Standalone ollama-backed git/workflow CLI plus docker-compose helpers — no che-cli, no gh, no python.",
+  "description": "Cura dev-env CLI (Node.js + TypeScript). Cura-specific helpers: docker-compose stack, ollama setup, GCP Cloud Run control, .che/workflows runner. No git/GitHub commands (use che-cli for that). Pure Node — no python, no che-cli, no js-yaml.",
   "type": "module",
   "bin": {
     "cura": "dist/main.js"
