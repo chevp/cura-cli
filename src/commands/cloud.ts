@@ -6,7 +6,7 @@ import {
   CLOUD_RUN_SERVICES,
   activeGcloudAccount,
   describeService,
-  readGcpEnv,
+  resolveGcpEnv,
   type GcpEnv,
 } from "../gcp.js";
 
@@ -46,12 +46,14 @@ function info(msg: string): void {
 
 type CloudEnv = GcpEnv;
 
-function readCloudEnv(): CloudEnv | null {
-  const env = readGcpEnv();
+async function readCloudEnv(): Promise<CloudEnv | null> {
+  const env = await resolveGcpEnv();
   if (!env) {
     process.stderr.write(
-      `cura cloud: GCP_PROJECT ist nicht gesetzt.\n` +
-        `       hint: export GCP_PROJECT=<projekt-id>  (siehe deployment/cloud-run.md)\n`,
+      `cura cloud: GCP_PROJECT nicht gesetzt und 'gcloud config get-value project' liefert nichts.\n` +
+        `       hint 1: export GCP_PROJECT=<projekt-id>\n` +
+        `       hint 2: gcloud config set project <projekt-id>\n` +
+        `       (GCP_PROJECT ist ein GitHub-Actions-Secret und steht lokal nicht automatisch zur Verfügung)\n`,
     );
     return null;
   }

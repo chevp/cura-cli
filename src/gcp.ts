@@ -1,4 +1,4 @@
-import { execAsync } from "./spawn.js";
+import { commandExists, execAsync } from "./spawn.js";
 
 export interface GcpEnv {
   project: string;
@@ -28,12 +28,55 @@ const EMPTY: ServiceInfo = {
   notReadyReason: "",
 };
 
+let cachedGcloudProject: string | null | undefined;
+
+async function readGcloudProject(): Promise<string | null> {
+  if (cachedGcloudProject !== undefined) return cachedGcloudProject;
+  if (!commandExists("gcloud")) {
+    cachedGcloudProject = null;
+    return null;
+  }
+  const r = await execAsync(
+    "gcloud",
+    ["config", "get-value", "project", "--quiet"],
+    { separateStderr: true, timeoutMs: 5_000 },
+  );
+  // gcloud prints "(unset)" when no project is configured — reject that.
+  const out = (r.stdout ?? "").trim();
+  if (!r.ok || !out || out === "(unset)") {
+    cachedGcloudProject = null;
+    return null;
+  }
+  cachedGcloudProject = out;
+  return out;
+}
+
 /**
- * Read GCP env. Returns null when GCP_PROJECT is unset — callers decide whether
- * that's a hard error (cloud subcommands) or a silent skip (status overview).
+ * Synchronous read of GCP_PROJECT env var. Returns null when unset. Use
+ * resolveGcpEnv() for the async fallback to `gcloud config get-value project`.
  */
 export function readGcpEnv(): GcpEnv | null {
   const project = process.env.GCP_PROJECT;
+  if (!project) return null;
+  return {
+    project,
+    region: process.env.GCP_REGION || "europe-west6",
+  };
+}
+
+/**
+ * Resolves GCP_PROJECT from (1) the env var, (2) `gcloud config get-value project`.
+ * Region falls back to GCP_REGION env, then "europe-west6". Returns null when
+ * neither source yields a project.
+ *
+ * GCP_PROJECT is a GitHub Actions secret in cura's deploy workflow, so it is
+ * NOT in the local shell unless the user exports it. The gcloud-config
+ * fallback makes 'cura cloud' work after `gcloud config set project <id>`.
+ */
+export async function resolveGcpEnv(): Promise<GcpEnv | null> {
+  const fromEnv = readGcpEnv();
+  if (fromEnv) return fromEnv;
+  const project = await readGcloudProject();
   if (!project) return null;
   return {
     project,

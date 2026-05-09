@@ -1,8 +1,7 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, parse } from "node:path";
 import { CURA_OS } from "../platform.js";
 import { commandExists, execInherit } from "../spawn.js";
-import { git, isInsideRepo } from "../git/index.js";
 
 const HELP = `cura reinstall — re-run the current repo's reinstall script.
 
@@ -14,9 +13,23 @@ preferred. Elsewhere, the .sh form is preferred.
   windows: scripts/reinstall.ps1 → scripts/reinstall.sh
   other:   scripts/reinstall.sh  → scripts/reinstall.ps1
 
-Both are searched in the cwd first, then at the git root.
-Any extra args are forwarded to the chosen script.
+Both are searched in the cwd first, then walking up to the nearest ancestor
+that has a 'scripts/' directory. Any extra args are forwarded to the script.
 `;
+
+/** Walk up from `start` until a directory containing `scripts/` is found. */
+function findScriptsRoot(start: string): string | null {
+  let cur = start;
+  const root = parse(cur).root;
+  while (cur && cur !== root) {
+    if (existsSync(join(cur, "scripts"))) return cur;
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  if (existsSync(join(cur, "scripts"))) return cur;
+  return null;
+}
 
 export async function run(argv: string[]): Promise<number> {
   let args = argv;
@@ -26,26 +39,24 @@ export async function run(argv: string[]): Promise<number> {
   }
   if (args[0] === "--") args = args.slice(1);
 
-  let gitRoot = "";
-  if (isInsideRepo()) {
-    gitRoot = git(["rev-parse", "--show-toplevel"]).stdout.trim();
-  }
+  const cwd = process.cwd();
+  const scriptsRoot = findScriptsRoot(cwd) ?? "";
 
   const sh = "scripts/reinstall.sh";
   const ps1 = "scripts/reinstall.ps1";
   const candidates =
     CURA_OS === "windows"
       ? [
-          join(process.cwd(), ps1),
-          gitRoot ? join(gitRoot, ps1) : "",
-          join(process.cwd(), sh),
-          gitRoot ? join(gitRoot, sh) : "",
+          join(cwd, ps1),
+          scriptsRoot ? join(scriptsRoot, ps1) : "",
+          join(cwd, sh),
+          scriptsRoot ? join(scriptsRoot, sh) : "",
         ]
       : [
-          join(process.cwd(), sh),
-          gitRoot ? join(gitRoot, sh) : "",
-          join(process.cwd(), ps1),
-          gitRoot ? join(gitRoot, ps1) : "",
+          join(cwd, sh),
+          scriptsRoot ? join(scriptsRoot, sh) : "",
+          join(cwd, ps1),
+          scriptsRoot ? join(scriptsRoot, ps1) : "",
         ];
 
   for (const path of candidates) {
@@ -61,14 +72,21 @@ export async function run(argv: string[]): Promise<number> {
       }
       return execInherit(psh, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path, ...args]);
     }
+    if (CURA_OS === "windows" && !commandExists("bash")) {
+      process.stderr.write(
+        `cura reinstall: found ${path} but 'bash' is not on PATH (needed on Windows)\n` +
+          "  install Git for Windows or WSL, or provide scripts/reinstall.ps1\n",
+      );
+      return 1;
+    }
     return execInherit("bash", [path, ...args]);
   }
 
   process.stderr.write(
-    `cura reinstall: no scripts/reinstall.sh found in ${process.cwd()}${
-      gitRoot && gitRoot !== process.cwd() ? ` or ${gitRoot}` : ""
+    `cura reinstall: no scripts/reinstall.{sh,ps1} found in ${cwd}${
+      scriptsRoot && scriptsRoot !== cwd ? ` or ${scriptsRoot}` : ""
     }\n` +
-      "Convention: each repo provides its own scripts/reinstall.sh.\n",
+      "Convention: each repo provides its own scripts/reinstall.sh (or .ps1 on Windows).\n",
   );
   return 1;
 }
