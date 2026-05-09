@@ -96,23 +96,110 @@ async function serviceExists(svc: string, env: CloudEnv): Promise<boolean> {
   return r.ok && r.stdout.trim() === svc;
 }
 
+interface ServiceInfo {
+  exists: boolean;
+  url: string;
+  ingress: string;
+  iap: string;
+  revision: string;
+  ready: boolean;
+  notReadyReason: string;
+}
+
+async function describeService(svc: string, env: CloudEnv): Promise<ServiceInfo> {
+  const empty: ServiceInfo = {
+    exists: false,
+    url: "",
+    ingress: "",
+    iap: "",
+    revision: "",
+    ready: false,
+    notReadyReason: "",
+  };
+  const r = await execAsync(
+    "gcloud",
+    [
+      "run",
+      "services",
+      "describe",
+      svc,
+      `--region=${env.region}`,
+      `--project=${env.project}`,
+      "--format=json",
+    ],
+    { separateStderr: true },
+  );
+  if (!r.ok || !r.stdout.trim()) return empty;
+  try {
+    const obj = JSON.parse(r.stdout) as {
+      status?: {
+        url?: string;
+        latestReadyRevisionName?: string;
+        conditions?: Array<{ type?: string; status?: string; message?: string }>;
+      };
+      spec?: { template?: { metadata?: { annotations?: Record<string, string> } } };
+      metadata?: { annotations?: Record<string, string> };
+    };
+    const tplAnn = obj.spec?.template?.metadata?.annotations ?? {};
+    const meta = obj.metadata?.annotations ?? {};
+    const readyCond = obj.status?.conditions?.find((c) => c.type === "Ready");
+    return {
+      exists: true,
+      url: obj.status?.url ?? "",
+      ingress: tplAnn["run.googleapis.com/ingress"] ?? "all",
+      iap: meta["run.googleapis.com/iap-enabled"] ?? "false",
+      revision: obj.status?.latestReadyRevisionName ?? "?",
+      ready: readyCond?.status === "True",
+      notReadyReason:
+        readyCond?.status === "False" ? readyCond?.message ?? "not ready" : "",
+    };
+  } catch {
+    return empty;
+  }
+}
+
 async function runStatus(): Promise<number> {
   const env = readCloudEnv();
   if (!env) return 1;
   if (!(await ensureGcloud())) return 1;
 
-  const repo = getCuraRepo();
-  const verify = join(repo, "scripts", "gcp", "verify.sh");
-  if (!existsSync(verify)) {
-    process.stderr.write(`cura cloud status: ${verify} nicht gefunden\n`);
-    return 1;
-  }
+  // Aktiver gcloud-Account zur Orientierung — Calls schlagen sonst stumm fehl.
+  const auth = await execAsync(
+    "gcloud",
+    ["auth", "list", "--filter=status:ACTIVE", "--format=value(account)"],
+    { separateStderr: true },
+  );
+  const account = auth.ok ? auth.stdout.trim() : "";
 
-  // verify.sh erwartet GCP_PROJECT/GCP_REGION im Environment.
-  return execInherit("bash", [verify], {
-    cwd: repo,
-    env: { ...process.env, GCP_PROJECT: env.project, GCP_REGION: env.region },
-  });
+  section(`cloud status (${env.project} / ${env.region})`);
+  kv("account", account || c.red("nicht eingeloggt — gcloud auth login"));
+
+  let anyMissing = false;
+  let anyNotReady = false;
+  for (const svc of SERVICES) {
+    line();
+    process.stdout.write(`  ${c.bold(svc)}\n`);
+    const info_ = await describeService(svc, env);
+    if (!info_.exists) {
+      process.stdout.write(`    ${c.red("✗")} existiert nicht\n`);
+      anyMissing = true;
+      continue;
+    }
+    const readyMark = info_.ready ? c.green("✓") : c.red("✗");
+    process.stdout.write(`    ${readyMark} url       ${info_.url}\n`);
+    process.stdout.write(`      ingress   ${info_.ingress}\n`);
+    process.stdout.write(`      iap       ${info_.iap}\n`);
+    process.stdout.write(`      revision  ${info_.revision}\n`);
+    if (!info_.ready) {
+      process.stdout.write(`    ${c.red("!")} ${info_.notReadyReason}\n`);
+      anyNotReady = true;
+    }
+  }
+  line();
+  if (anyMissing) {
+    info("hint: 'cura cloud rebuild' für initial deploy");
+  }
+  return !anyMissing && !anyNotReady ? 0 : 1;
 }
 
 async function updateIngress(
