@@ -15,6 +15,8 @@ Commands:
   run <name>          execute a workflow from .che/workflows/<name>.yml
                       (alias for: cura workflow run <name>)
   workflow <sub>      list / show / run workflows from .che/workflows/
+  cloud <sub>         control GCP Cloud Run services (status / start / stop /
+                      reset / rebuild) — see 'cura cloud --help'
   <trigger> [args]    any workflow with 'trigger: <name>' in its YAML can be
                       run as 'cura <name>' — shadows the built-ins above
   reinstall           re-run the current repo's scripts/reinstall.sh
@@ -31,6 +33,8 @@ Environment:
   CURA_OLLAMA_HOST       Ollama base URL (default: http://localhost:11434)
   CURA_OLLAMA_MODEL      Ollama model (default: llama3.2)
   CURA_MAX_DIFF_CHARS    diff truncation length for commit messages (default: 8000)
+  GCP_PROJECT            project ID for 'cura cloud' (required)
+  GCP_REGION             region for 'cura cloud' (default: europe-west6)
 `;
 
 export async function run(_argv: string[]): Promise<number> {

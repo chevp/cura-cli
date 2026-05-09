@@ -12,6 +12,7 @@ import * as reinstallCmd from "./commands/reinstall.js";
 import * as configCmd from "./commands/config.js";
 import * as doctorCmd from "./commands/doctor.js";
 import * as workflowCmd from "./commands/workflow.js";
+import * as cloudCmd from "./commands/cloud.js";
 import { resolveTrigger } from "./workflow/loader.js";
 
 type CommandRunner = (argv: string[]) => Promise<number>;
@@ -29,6 +30,7 @@ const COMMANDS: Record<string, CommandRunner> = {
   doctor: doctorCmd.run,
   workflow: workflowCmd.run,
   run: workflowCmd.runAlias,
+  cloud: cloudCmd.run,
 
   help: helpCmd.run,
   "-h": helpCmd.run,
