@@ -10,20 +10,27 @@ import {
   type GcpEnv,
 } from "../gcp.js";
 
-const HELP = `cura cloud — steuert die GCP Cloud Run Services (cura-app, core-service, cura-llm).
+const HELP = `cura cloud — steuert die GCP Cloud Run Services (cura-orchestrator, cura-llm).
 
 Usage: cura cloud <subcommand> [options]
 
 Subcommands:
   status               zeigt URL, Ingress, IAP, Revision pro Service
-  start                macht cura-app + core-service public erreichbar
-                       (--ingress=all --allow-unauthenticated)
-  stop                 sperrt den Public-Ingress (--ingress=internal
-                       --no-allow-unauthenticated). Services bleiben bestehen.
-  reset [--yes|-y]     löscht alle drei Services. Fragt y/N nach, sofern --yes
+  reset [--yes|-y]     löscht beide Services. Fragt y/N nach, sofern --yes
                        nicht gesetzt ist.
-  rebuild              triggert den GitHub Actions Workflow 'deploy-gcp.yml'
-                       (Build + Redeploy aller Services).
+  rebuild <target>     triggert den GitHub-Actions-Deploy. target: llm | orchestrator
+                       cura-orchestrator setzt ein bereits deploytes cura-llm
+                       voraus (Preflight-Check) — bei Full-Redeploy erst
+                       'rebuild llm' laufen lassen, Run abwarten, dann
+                       'rebuild orchestrator'.
+
+Beide Services laufen IMMER mit --no-allow-unauthenticated (IAM/IAP-only,
+siehe scripts/gcp/deploy-orchestrator.sh + deploy-llm.sh) — bewusst KEIN
+'start'/'stop'-Ingress-Toggle mehr, der einen Service public schalten könnte.
+Zugriff freischalten:
+  - cura-llm: LLM_INGRESS Workflow-Input (all/internal), Auth bleibt IAM
+  - cura-orchestrator: IAP_ALLOWED_USERS (wire-iap.sh) oder lokal via
+    'gcloud run services proxy cura-orchestrator --region=<region>'
 
 Environment:
   GCP_PROJECT          GCP Projekt-ID. Fallback: 'gcloud config get-value project'
@@ -31,8 +38,10 @@ Environment:
 `;
 
 const SERVICES = CLOUD_RUN_SERVICES;
-const PUBLIC_SERVICES = ["cura-app", "core-service"] as const;
-const WORKFLOW_FILE = "deploy-gcp.yml";
+const REBUILD_WORKFLOWS: Record<string, string> = {
+  llm: "deploy-llm.yml",
+  orchestrator: "deploy-orchestrator.yml",
+};
 
 function ok(msg: string): void {
   process.stdout.write(`  ${c.green("✓")} ${msg}\n`);
@@ -138,79 +147,6 @@ async function runStatus(): Promise<number> {
   return !anyMissing && !anyNotReady ? 0 : 1;
 }
 
-async function updateIngress(
-  svc: string,
-  env: CloudEnv,
-  mode: "public" | "internal",
-): Promise<boolean> {
-  const flags =
-    mode === "public"
-      ? ["--ingress=all", "--allow-unauthenticated"]
-      : ["--ingress=internal", "--no-allow-unauthenticated"];
-  const r = await execAsync(
-    "gcloud",
-    [
-      "run",
-      "services",
-      "update",
-      svc,
-      `--region=${env.region}`,
-      `--project=${env.project}`,
-      "--quiet",
-      ...flags,
-    ],
-    { separateStderr: true },
-  );
-  if (r.ok) {
-    ok(`${svc}: ${mode === "public" ? "ingress=all, public" : "ingress=internal, no-unauth"}`);
-    return true;
-  }
-  fail(`${svc}: update fehlgeschlagen`);
-  if (r.stderr.trim()) info(r.stderr.trim().split(/\r?\n/).slice(0, 3).join(" | "));
-  return false;
-}
-
-async function runStart(): Promise<number> {
-  const env = await readCloudEnv();
-  if (!env) return 1;
-  if (!(await ensureGcloud())) return 1;
-
-  section(`cloud start (${env.project} / ${env.region})`);
-  let failed = 0;
-  for (const svc of PUBLIC_SERVICES) {
-    if (!(await serviceExists(svc, env))) {
-      fail(`${svc}: existiert nicht — 'cura cloud rebuild' für initial deploy`);
-      failed++;
-      continue;
-    }
-    if (!(await updateIngress(svc, env, "public"))) failed++;
-  }
-  // cura-llm bleibt unverändert: ist je nach IAP-Modus internal oder public,
-  // wird vom Deploy-Script gesteuert. Manuelles Toggeln hier macht es kaputt.
-  info("cura-llm: unverändert (vom Deploy-Modus IAP_ENABLED gesteuert)");
-  line();
-  return failed === 0 ? 0 : 1;
-}
-
-async function runStop(): Promise<number> {
-  const env = await readCloudEnv();
-  if (!env) return 1;
-  if (!(await ensureGcloud())) return 1;
-
-  section(`cloud stop (${env.project} / ${env.region})`);
-  let failed = 0;
-  for (const svc of PUBLIC_SERVICES) {
-    if (!(await serviceExists(svc, env))) {
-      info(`${svc}: existiert nicht, übersprungen`);
-      continue;
-    }
-    if (!(await updateIngress(svc, env, "internal"))) failed++;
-  }
-  info("cura-llm: unverändert (vom Deploy-Modus IAP_ENABLED gesteuert)");
-  line();
-  return failed === 0 ? 0 : 1;
-}
-
 async function runReset(argv: string[]): Promise<number> {
   const env = await readCloudEnv();
   if (!env) return 1;
@@ -226,7 +162,7 @@ async function runReset(argv: string[]): Promise<number> {
     if (await serviceExists(svc, env)) existing.push(svc);
   }
   if (existing.length === 0) {
-    info("nichts zu löschen — keine der drei Services existiert");
+    info("nichts zu löschen — keiner der beiden Services existiert");
     line();
     return 0;
   }
@@ -270,13 +206,24 @@ async function runReset(argv: string[]): Promise<number> {
 }
 
 async function runRebuild(argv: string[]): Promise<number> {
+  const target = argv[0];
+  const workflowFile = target ? REBUILD_WORKFLOWS[target] : undefined;
+  if (!workflowFile) {
+    process.stderr.write(
+      `cura cloud rebuild: target '${target ?? ""}' unbekannt — erwarte 'llm' oder 'orchestrator'.\n`,
+    );
+    return 1;
+  }
   if (!(await ensureGh())) return 1;
   const repo = getCuraRepo();
 
-  section("cloud rebuild");
-  kv("workflow", WORKFLOW_FILE);
+  section(`cloud rebuild ${target}`);
+  kv("workflow", workflowFile);
+  if (target === "orchestrator") {
+    info("Preflight prüft ob cura-llm bereits deployed ist — sonst schlägt der Run fehl.");
+  }
 
-  const ghArgs = ["workflow", "run", WORKFLOW_FILE, ...argv];
+  const ghArgs = ["workflow", "run", workflowFile, ...argv.slice(1)];
   const r = await execAsync("gh", ghArgs, { cwd: repo, separateStderr: true });
   if (!r.ok) {
     fail(`gh workflow run fehlgeschlagen`);
@@ -288,7 +235,7 @@ async function runRebuild(argv: string[]): Promise<number> {
   // Direkt den letzten Run anzeigen, damit der User den Link bekommt.
   const list = await execAsync(
     "gh",
-    ["run", "list", "--workflow", WORKFLOW_FILE, "--limit", "1", "--json", "url,status,createdAt"],
+    ["run", "list", "--workflow", workflowFile, "--limit", "1", "--json", "url,status,createdAt"],
     { cwd: repo, separateStderr: true },
   );
   if (list.ok && list.stdout.trim()) {
@@ -314,10 +261,6 @@ export async function run(argv: string[]): Promise<number> {
   switch (sub) {
     case "status":
       return runStatus();
-    case "start":
-      return runStart();
-    case "stop":
-      return runStop();
     case "reset":
       return runReset(rest);
     case "rebuild":

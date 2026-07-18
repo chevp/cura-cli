@@ -5,7 +5,10 @@ export interface GcpEnv {
   region: string;
 }
 
-export const CLOUD_RUN_SERVICES = ["cura-app", "core-service", "cura-llm"] as const;
+// cura-orchestrator ist ab POC-23 das einzige fachliche Backend (ersetzt die
+// früheren Einzel-Deploys cura-app/core-service/cura-gateway/kaga/akagi, siehe
+// .github/workflows/deploy-orchestrator.yml). cura-llm bleibt separat deployed.
+export const CLOUD_RUN_SERVICES = ["cura-orchestrator", "cura-llm"] as const;
 export type CloudRunService = (typeof CLOUD_RUN_SERVICES)[number];
 
 export interface ServiceInfo {

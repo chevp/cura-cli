@@ -10,8 +10,8 @@ Commands:
   run <name>          execute a workflow from .che/workflows/<name>.yml
                       (alias for: cura workflow run <name>)
   workflow <sub>      list / show / run workflows from .che/workflows/
-  cloud <sub>         control GCP Cloud Run services (status / start / stop /
-                      reset / rebuild) — see 'cura cloud --help'
+  cloud <sub>         control GCP Cloud Run services (status / reset / rebuild)
+                      — see 'cura cloud --help'
   <trigger> [args]    any workflow with 'trigger: <name>' in its YAML can be
                       run as 'cura <name>' — shadows the built-ins above
   reinstall           re-run the current repo's scripts/reinstall.{sh,ps1}
