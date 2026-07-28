@@ -24,8 +24,8 @@ Dev-Env hinausgeht, gehört in `che-cli` (Git/LLM/Provider) bzw. `gh` oder
 `cura` ruft `docker`, `ollama`, `gcloud`, optional `gh` als Kindprozess
 (`child_process.spawn`). Lose Kopplung. **Keine Abhängigkeit auf `che`.**
 
-**Sprache:** Node.js + TypeScript. Pure Node, keine Runtime-Deps. Build via
-`tsc`, ausgeliefert über `npm install -g`.
+**Sprache:** Node.js + TypeScript. Runtime-Dep: `commander` (Dispatch +
+Options-Parsing). Build via `tsc`, ausgeliefert über `npm install -g`.
 
 ## Subcommands (v0.3)
 

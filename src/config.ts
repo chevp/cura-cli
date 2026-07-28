@@ -5,14 +5,11 @@ import { join } from "node:path";
 export const CURA_CONFIG_FILE: string =
   process.env.CURA_CONFIG_FILE ?? join(homedir(), ".cura", "config");
 
-/**
- * cura-cli is ollama-only, so the persisted config knobs are limited to
- * Ollama coordinates and the generic diff truncation.
- */
 const KEY_TO_ENV: Record<string, string> = {
   ollama_host: "CURA_OLLAMA_HOST",
   ollama_model: "CURA_OLLAMA_MODEL",
   max_diff_chars: "CURA_MAX_DIFF_CHARS",
+  orchestrator_host: "CURA_ORCHESTRATOR_HOST",
 };
 
 /**

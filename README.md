@@ -1,8 +1,9 @@
 # cura-cli
 
 Cura-spezifische Dev-Env-Befehle (Docker-Stack, Ollama-Setup, GCP Cloud Run,
-`.che/workflows`-Runner). **Standalone, pure Node.js** — keine Abhängigkeit
-auf `che-cli`, kein Python, kein `js-yaml`.
+`.che/workflows`-Runner). **Standalone Node.js** — keine Abhängigkeit auf
+`che-cli`, kein Python, kein `js-yaml`. Einzige Runtime-Dep: `commander`
+(Argument-Parsing/Dispatch).
 
 ```sh
 $ cura up                  # docker compose -f docker-compose.local.yml up -d
@@ -145,18 +146,37 @@ cura config edit                       # öffnet im $EDITOR
 Re-runs das repo-lokale `scripts/reinstall.{sh,ps1}`. Auf Windows wird `.ps1`
 bevorzugt, sonst `.sh`. Walk-up nach `scripts/`-Verzeichnis.
 
+### `cura chat`
+
+Interaktive REPL gegen den laufenden `cura.orchestrator`-Chat-Endpoint
+(`POST /api/chat/stream`, SSE). Nützlich um Orchestrator-Konversationen
+(System-Prompt, Atlas-Context, Modes) manuell zu testen, ohne das Frontend
+zu starten.
+
+```sh
+cura chat                          # startet REPL, neue sessionId (UUID)
+cura chat --resident <id>          # residentId auf jeder Turn mitschicken
+cura chat --mode bericht           # spezialisierter Agent/System-Prompt
+cura chat --model <name>           # Modell-Override
+```
+
+Tippen + Enter schickt eine Turn; Antwort wird gestreamt ausgegeben.
+`/exit`, `/quit` oder Ctrl+C beendet die Session. Erfordert den laufenden
+lokalen Stack (`cura up`) — Port und Host über `CURA_ORCHESTRATOR_HOST`.
+
 ---
 
 ## Configuration
 
-| Variable             | Default                                                                  |
-|----------------------|--------------------------------------------------------------------------|
-| `CURA_REPO`          | auto-detected (walk-up + cache); fallback `$HOME/workspace/misc/cura`    |
-| `CURA_COMPOSE_FILE`  | `<CURA_REPO>/docker-compose.local.yml`                                   |
-| `CURA_OLLAMA_HOST`   | `http://localhost:11434`                                                 |
-| `CURA_OLLAMA_MODEL`  | `llama3.2`                                                               |
-| `GCP_PROJECT`        | (kein Default — Fallback auf `gcloud config get-value project`)          |
-| `GCP_REGION`         | `europe-west6`                                                           |
+| Variable                 | Default                                                                  |
+|---------------------------|--------------------------------------------------------------------------|
+| `CURA_REPO`               | auto-detected (walk-up + cache); fallback `$HOME/workspace/misc/cura`    |
+| `CURA_COMPOSE_FILE`       | `<CURA_REPO>/docker-compose.local.yml`                                   |
+| `CURA_OLLAMA_HOST`        | `http://localhost:11434`                                                 |
+| `CURA_OLLAMA_MODEL`       | `llama3.2`                                                               |
+| `CURA_ORCHESTRATOR_HOST`  | `http://localhost:8092` (cura.orchestrator, used by `cura chat`)         |
+| `GCP_PROJECT`             | (kein Default — Fallback auf `gcloud config get-value project`)          |
+| `GCP_REGION`              | `europe-west6`                                                           |
 
 ---
 
@@ -175,6 +195,7 @@ tools/cura-cli/
 │   ├── yaml.ts              # minimal YAML parser (no js-yaml dep)
 │   ├── workflow/loader.ts   # .che/workflows resolver
 │   ├── provider/ollama.ts   # local Ollama HTTP client
+│   ├── provider/orchestrator.ts # cura.orchestrator chat SSE client
 │   └── commands/
 │       ├── up.ts / down.ts
 │       ├── init.ts          # ollama provisioning
@@ -182,6 +203,7 @@ tools/cura-cli/
 │       ├── workflow.ts      # workflow runner
 │       ├── status.ts / doctor.ts
 │       ├── config.ts / reinstall.ts
+│       ├── chat.ts          # REPL against cura.orchestrator /api/chat/stream
 │       └── help.ts
 ├── README.md
 └── SPEC.md

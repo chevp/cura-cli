@@ -7,6 +7,8 @@ Commands:
   down [args]         stop the Cura local stack
   status              show cura-cli config (provider, model), plans, cloud + cyon
   init                provision local ollama (verify binary, start server, pull model)
+  chat [options]      interactive REPL against the running cura.orchestrator chat
+                      endpoint (see 'cura chat --help')
   run <name>          execute a workflow from .che/workflows/<name>.yml
                       (alias for: cura workflow run <name>)
   workflow <sub>      list / show / run workflows from .che/workflows/
@@ -29,6 +31,7 @@ Environment:
   CURA_COMPOSE_FILE      compose file for up/down (default: <repo>/docker-compose.local.yml)
   CURA_OLLAMA_HOST       Ollama base URL (default: http://localhost:11434)
   CURA_OLLAMA_MODEL      Ollama model (default: llama3.2)
+  CURA_ORCHESTRATOR_HOST cura.orchestrator base URL for 'cura chat' (default: http://localhost:8092)
   GCP_PROJECT            project ID for 'cura cloud' (falls back to 'gcloud config get-value project')
   GCP_REGION             region for 'cura cloud' (default: europe-west6)
 `;
