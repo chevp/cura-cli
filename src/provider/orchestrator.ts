@@ -43,8 +43,7 @@ export async function ping(): Promise<boolean> {
 
 /**
  * POSTs one chat turn to cura.orchestrator's SSE endpoint and dispatches
- * delta|done|error events as they arrive. Mirrors
- * frontend/cura-compose/src/runtime/chat.ts, which is the reference client.
+ * delta|done|error events as they arrive.
  */
 export async function streamChat(
   req: ChatStreamRequest,
